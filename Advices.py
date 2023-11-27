@@ -1,25 +1,25 @@
+import sqlite3
+
+from yaml.loader import SafeLoader
+import yaml
+import streamlit_authenticator as stauth
+import streamlit as st
+import warnings
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain.llms import Bedrock
-from langchain.vectorstores import Chroma
+
 from langchain.embeddings import HuggingFaceEmbeddings
 
 from langchain.chains.question_answering import load_qa_chain
 from langchain import PromptTemplate
 
-import warnings
 
-import streamlit as st
-import streamlit_authenticator as stauth
+from langchain.memory import ConversationBufferMemory
+from langchain.memory.chat_message_histories import SQLChatMessageHistory
 
-import yaml
-from yaml.loader import SafeLoader
+import docs
+import prompt_template
 
-import os.path
-import pathlib
-
-from data_loader import load
-
-import sqlite3
 
 # Settings the warnings to be ignored
 warnings.filterwarnings('ignore')
@@ -46,69 +46,33 @@ def get_llm():
         streaming=True,
         callbacks=[StreamingStdOutCallbackHandler()]
     )
+
     return llm
 
 
-def get_methodology_answer(query, weight=4):
-    parent_path = pathlib.Path(__file__).parent.resolve()
-    user_path = os.path.join(parent_path, "embedding_methodology")
-    vectordb = Chroma(
-        embedding_function=embeddings,
-        persist_directory=user_path
-    )
-    return vectordb.similarity_search(query, k=weight)
-
-
-def get_project_answer(query, project, weight=4):
-    vectordb = Chroma(
-        embedding_function=embeddings,
-        persist_directory="/Users/alex/dev/deanx/ia/langchain-pdf/pdf1/bedrock_embeddings"
-    )
-    return vectordb.similarity_search(query, k=weight)
-
-
-def get_technical_answer(query, weight=2):
-    vectordb = Chroma(
-        embedding_function=embeddings,
-        persist_directory="/Users/alex/dev/deanx/ia/langchain-pdf/pdf1/stored"
-    )
-    return vectordb.similarity_search(query, k=weight)
-
-
 def generate_response(message, project, role="Advisor"):
-    
-    if role == "Advisor":
-        prompt_template = """Use ONLY the following pieces of context to answer the question at the end. 
-        If you cannot find the answer in the following context, just say that you don't know, don't try to make up an answer.
-        {context}
-        Assuming your are a Strategic Advisor, answer the following question:
-        Question: {question}
-        """
 
-        project_docs = list(get_project_answer(message, project, 4))
-        methodology_docs = list(get_methodology_answer(message, 4))
-        tech_docs = list(get_technical_answer(message, 2))
+    llm = get_llm()
 
-    else:
-        prompt_template = """Use ONLY the following pieces of context to answer the question at the end. 
-            If you cannot find the answer in the following context, just say that you don't know, don't try to make up an answer.
-            {context}
-            Assuming your are a Software Implementation Architect, answer the following question:
-            Question: {question}
-            """
-        project_docs = list(get_project_answer(message, project, 4))
-        methodology_docs = list(get_methodology_answer(message, 4))
-        tech_docs = list(get_technical_answer(message, 2))
+    final_docs = docs.docs(project, message, embeddings, role)
 
-    final_docs = project_docs + methodology_docs + tech_docs
-        
-    
-    return ""
-    PROMPT = PromptTemplate(
-        template=prompt_template, input_variables=["context", "question"]
+    pt = prompt_template.generate_prompt_template(project, role)
+
+    prompt = PromptTemplate(
+        template=pt, input_variables=[
+            "chat_history", "context", "question"]
     )
 
-    chain = load_qa_chain(get_llm(), chain_type="stuff", prompt=PROMPT)
+    message_history = SQLChatMessageHistory(session_id="session_id",
+                                            connection_string="sqlite:///history/" + project + ".db")
+
+    memory = ConversationBufferMemory(llm=llm, return_messages=True,
+                                      memory_key="chat_history", input_key='question', chat_memory=message_history)
+
+    chain = load_qa_chain(llm, chain_type="stuff",
+                          memory=memory, prompt=prompt)
+
+    print("here it goes!", memory.to_json, " and how it was!")
 
     response = chain({"input_documents": final_docs, "question": message},
                      return_only_outputs=True)
@@ -151,12 +115,13 @@ def on_input_change():
     input = st.session_state.user_input
     chat_role = st.session_state.chat_role
     project = st.session_state.chat_project
-    
+
     if len(input) < 10:
 
         st.toast("Need more than 10 characters to throw a question")
         return
-    response = generate_response(st.session_state.user_input, project, chat_role)
+    response = generate_response(
+        st.session_state.user_input, project, chat_role)
 
     st.session_state.messages.append({"role": "user", "content": input})
     st.session_state.messages.append(
@@ -165,9 +130,10 @@ def on_input_change():
 
 with sqlite3.connect("projects.db") as connection:
     cursor = connection.cursor()
-    query = cursor.execute("select project from projects where username='" + username + "'")
+    query = cursor.execute(
+        "select project from projects where username='" + username + "'")
     projects = [project[0] for project in query.fetchall()]
-    
+
 col1, col2 = st.columns(2)
 
 with col1:
@@ -175,7 +141,8 @@ with col1:
         "Advisor", "Technical"], label_visibility="visible", placeholder="Role", key="chat_role")
 
 with col2:
-    st.selectbox(label="Project", options=projects, label_visibility="visible", key="chat_project", placeholder="Project")
+    st.selectbox(label="Project", options=projects,
+                 label_visibility="visible", key="chat_project", placeholder="Project")
 
 st.text_input(
     label="message", label_visibility="hidden", on_change=on_input_change, key="user_input", placeholder="Question")
