@@ -29,16 +29,19 @@ def get_methodology_answer(query, embeddings, weight=4):
 
 
 def get_project_answer(query, project, embeddings, weight=4):
+
     vectordb = Chroma(
         embedding_function=embeddings,
-        persist_directory="/Users/alex/dev/deanx/ia/langchain-pdf/pdf1/bedrock_embeddings"
+        persist_directory="./embeddings/" + "jsmith" + "/" + project
     )
     return vectordb.similarity_search(query, k=weight)
 
 
 def get_technical_answer(query, embeddings, weight=2):
+    parent_path = pathlib.Path(__file__).parent.resolve()
+    docs_path = os.path.join(parent_path, "stored")
     vectordb = Chroma(
         embedding_function=embeddings,
-        persist_directory="/Users/alex/dev/deanx/ia/langchain-pdf/pdf1/stored"
+        persist_directory=docs_path
     )
     return vectordb.similarity_search(query, k=weight)
