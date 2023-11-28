@@ -99,6 +99,6 @@ with st.container():
         with sqlite3.connect("projects.db") as connection:
             cursor = connection.cursor()
             query = cursor.execute("insert into files (project_id, date_add, file_name) values(" +
-                                   project_id + ",'" + str(datetime.date.today()) + "', '" + uploaded_file.name + "');")
+                                   str(project_id) + ",'" + str(datetime.date.today()) + "', '" + uploaded_file.name + "');")
 
         st.toast("File uploaded")
