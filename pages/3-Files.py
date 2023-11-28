@@ -64,23 +64,24 @@ with st.container():
 
     with sqlite3.connect("projects.db") as connection:
         cursor = connection.cursor()
-        query = cursor.execute("select id from projects where project='" +
-                               st.session_state.file_project + "'")
+        if st.session_state.file_project:
+            query = cursor.execute("select id from projects where project='" +
+                                   st.session_state.file_project + "'")
 
-        response = query.fetchone()
-        project_id = response[0]
+            response = query.fetchone()
+            project_id = response[0]
 
-        files_query = cursor.execute("select * from files where project_id=" +
-                                     str(project_id))
+            files_query = cursor.execute("select * from files where project_id=" +
+                                         str(project_id))
 
-        files = files_query.fetchall()
+            files = files_query.fetchall()
 
-        for id, project_id, date_add, file_name in files:
-            col1, col2 = st.columns(2)
-            col1.text(file_name)
-            col2.button("delete", key=id, on_click=delete_file,
-                        args=[id, file_name, st.session_state.file_project])
-            st.divider()
+            for id, project_id, date_add, file_name in files:
+                col1, col2 = st.columns(2)
+                col1.text(file_name)
+                col2.button("delete", key=id, on_click=delete_file,
+                            args=[id, file_name, st.session_state.file_project])
+                st.divider()
 
     uploaded_files = st.file_uploader(
         "Choose a PDF file:", accept_multiple_files=True, type=["pdf"])
