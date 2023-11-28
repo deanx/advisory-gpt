@@ -10,7 +10,7 @@ from langchain.embeddings import HuggingFaceEmbeddings
 def load_file(file_name, project, username):
 
     loader = DirectoryLoader(
-        './user_data/jsmith/' + project, glob="**/" + file_name, loader_cls=PDFPlumberLoader)
+        './user_data/' + username + '/' + project, glob="**/" + file_name, loader_cls=PDFPlumberLoader)
 
     embeddings = HuggingFaceEmbeddings()
 
